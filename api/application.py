@@ -66,11 +66,11 @@ def logout():
     return jsonify({"message": "The user logged out"})
 
 
-#"""Роутер главной страницы, отвечающий за загрузку файла"""
-#@app.route('/main')
-#@login_required
-#def upload_a_file():
-#    pass
+"""Роутер главной страницы, отвечающий за загрузку файла"""
+@app.route('/main')
+@login_required
+def upload_a_file():
+    pass
 
 
 @login_manager.user_loader
