@@ -1,18 +1,21 @@
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, \
+                              check_password_hash
 #from datetime import timedelta
 
 
-from application import db_session
+from .application import db
 
+db = SQLAlchemy()
 
-class User(db_session.Model, UserMixin):
+class User(db.Model, UserMixin):
     """Модель пользователя."""
     __tablename__ = 'users'
-    id = db_session.Column(db_session.Integer(), primary_key=True)
-    username = db_session.Column(db_session.String(80), unique=True, nullable=False)
-    email = db_session.Column(db_session.String(120), unique=True, nullable=False)
-    password = db_session.Column(db_session.Text(15), nullable=False)
+    id = db.Column(db.Integer(), primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.Text(15), nullable=False)
 
     def __init__(self, username, email, password):
         self.username = username
