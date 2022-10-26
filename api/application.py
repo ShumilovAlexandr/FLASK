@@ -1,7 +1,7 @@
 import os
 
 from flask import Flask, request, jsonify
-from flask_login import current_user, login_required, \
+from flask_login import login_required, \
                         LoginManager, logout_user
 from flask_jwt_extended import create_access_token
 from dotenv import load_dotenv
@@ -21,6 +21,7 @@ app.config["JWT_SECRET_KEY"] = os.getenv('JWT_SECRET_KEY')
 app.config["REFRESH_EXP_LENGTH"] = os.getenv('REFRESH_EXP_LENGTH')
 app.config["ACCESS_EXP_LENGTH"] = os.getenv('REFRESH_EXP_LENGTH')
 app.config["TOKEN_SECRET_KEY"] = os.getenv('TOKEN_SECRET_KEY')
+
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
@@ -49,10 +50,11 @@ def register():
 
 """Роутер аутентификации пользователя"""
 @app.route('/login', methods=['POST'])
-def login():                                                          ##TODO строчкой ниже создать объект класса User
-    email = request.get_json("email", None)                           ##TODO сделать фильтрацию по полю email
+def login():
+    email = request.get_json("email", None)
     password = request.get_json("password", None)
-    if not email or not User.check_password(password):                ##TODO тут должен вместо прямого указания на класс быть объект класса
+    new_user = User.query.filter_by(email=email).first()
+    if not email or not new_user.check_password(password):
         return jsonify({"message": "Bad username or password"}), 401
     access_token = create_access_token(identity=email)
     return jsonify(access_token=access_token)
