@@ -1,85 +1,112 @@
-from flask import request, jsonify
-from flask_login import LoginManager, login_user
-from flask_jwt_extended import JWTManager, create_access_token
-from psycopg2 import IntegrityError
+import psycopg2
 
+from flask import request, jsonify
+from flask_jwt_extended import JWTManager
+from psycopg2 import IntegrityError
 from model.models import User, db, app
 
-#app.config["REFRESH_EXP_LENGTH"] = os.getenv('REFRESH_EXP_LENGTH')
-#app.config["ACCESS_EXP_LENGTH"] = os.getenv('REFRESH_EXP_LENGTH')
-#app.config["TOKEN_SECRET_KEY"] = os.getenv('TOKEN_SECRET_KEY')
-
-login_manager = LoginManager(app)
 
 jwt = JWTManager(app)
 
-#BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-#
-#engine = create_engine(os.getenv('SQLALCHEMY_DATABASE_URL'))
-#session = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
+connection = psycopg2.connect(dbname="flaskapp", user="postgres", password="postgres",
+                              host="localhost")
 
 
-#@app.teardown_appcontext
-#def shutdown_session(exception=None):
-#    session.remove()
-#
-#
-"""Роутер регистрации пользователя"""
-@app.route('/signup', methods=["POST", "GET"])
+@app.route('/signup', methods=["POST"])
 def register():
-    if request.method == "POST":
-        try:
-            params = request.json
-            new_user = User(**params)
-            db.session.add(new_user)
-            db.session.commit()
-            return ({"id": new_user.id, 
-                     "username": new_user.username, 
-                     "email": new_user.email, 
-                     "password": new_user.password_hash})
-        except IntegrityError:
-            db.session.rollback()
-            return jsonify({"message": "User already exists"}), 400
-        except AttributeError:
-            return jsonify({"message": "Provide an email and password in JSON format in the request body"}), 400
+    """
+    Функция регистрации пользователя.
+    
+    В случае успешной регистрации пользователя, возвращается токен.
+    """
+    try:
+        params = request.json
+        new_user = User(**params)
+        db.session.add(new_user)
+        db.session.commit()
+        access_token = new_user.get_token()
+        return {"access_token": access_token}
+    except TypeError:
+        db.session.rollback()
 
 
-"""Роутер аутентификации пользователя"""
-@app.route('/login', methods=['POST'])
-def login():
-    email = request.get_json("email", None)
-    password = request.get_json("password", None)
-    new_user = db.session.query(User).filter(User.email == email).first()
-    if not email or not new_user.check_password(password):
-        return jsonify({"message": "Bad username or password"}), 401
-    login_user(new_user)
-    access_token = create_access_token(identity=email)
-    return jsonify(access_token=access_token)
+#@app.route('/login', methods=["POST"])
+#def login():
+#    """Функция логина пользователя."""
+#    email = request.get_json("email", None)
+#    password = request.get_json("password", None)
+#    if not email or not password:
+#        return jsonify({"message": "Bad username or password"}), 400
+#    new_user = User.query.filter(email == email).first()                    #TODO не работает мать его растак
+#    if not new_user:
+#        return jsonify({"message": "User not found"}), 404
+#    login_user(new_user)
+#    access_token = create_access_token(identity={"email": email})
+#    return jsonify({"access_token": access_token}), 200
 
 
 #"""Роутер отвечающий за выход пользователя"""
-#@app.route('/logout')
-#@login_required
+#@app.route('/logout')                              ## TODO доделать
+#@login_required                                    
 #def logout():
 #    logout_user
 #    return jsonify({"message": "The user logged out"})
 #
 #
-##"""Роутер для проверки пользователей в базе данных"""
-##@app.route('/users', methods=['GET', "DELETE"])
-##def check_users():
-##    ...
-#
+
+
+@app.route('/users', methods=["GET"])
+def get_users():
+    """
+    Функция для возврата всех пользователей из базы данных.
+    
+    В ТЗ не было задачи сделать такую функцию, но решил ее организовать
+    для проверки общего количества записей в БД о пользователях.
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute('SELECT users.id, users.email, users.username FROM users')
+        row = cursor.fetchall()
+        return jsonify(row)
+    except Exception as e:
+        return e
+
+
+@app.route('/users/<int:id>/', methods=["GET", "DELETE"])
+def get_or_delete_single_user(id):
+    """
+    Функция для возврата или удаления коткретного пользователя из базы данных.
+    
+    В ТЗ не было задачи сделать такую функцию, но решил ее организовать
+    для того чтобы можно было подчистить БД от лишних пользователей,
+    которых насоздавал во время тестирования приложения.
+    """
+    if request.method == "GET":
+        try:
+            cursor = connection.cursor()
+            cursor.execute('SELECT users.id, users.email, users.username FROM users WHERE id = {}'.format(id))
+            row = cursor.fetchone()
+            return jsonify(row)
+        except Exception as e:
+            return e
+    else:
+        try:
+            if request.method == "DELETE":
+                cursor = connection.cursor()
+                cursor.execute('DELETE FROM users WHERE id = {}'.format(id))
+                connection.commit()
+                row = cursor.rowcount
+                return jsonify(f"Общее количество удаленных записей - {row}", "Запись под номером {} успешно удалена".format(id))
+        except Exception as e:
+            return e
+
+
 ##"""Роутер главной страницы, отвечающий за загрузку файла"""
 ##@app.route('/main')
 ##@login_required
 ##def upload_a_file():
-##    pass
-#
-#
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get_id(user_id)
+##    ...
+
 
 
 if __name__ == "__main":
