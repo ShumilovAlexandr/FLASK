@@ -1,10 +1,17 @@
 import psycopg2
 
-from flask import request, jsonify
+from flask import request, jsonify, redirect, url_for
 from flask_jwt_extended import JWTManager
-from psycopg2 import IntegrityError
-from model.models import User, db, app
+from flask_login import login_user, \
+                        logout_user, \
+                        login_required, \
+                        current_user
 
+
+from model.models import User, db, app, login_manager
+
+
+login_manager.login_view = 'login'
 
 jwt = JWTManager(app)
 
@@ -30,29 +37,26 @@ def register():
         db.session.rollback()
 
 
-#@app.route('/login', methods=["POST"])
-#def login():
-#    """Функция логина пользователя."""
-#    email = request.get_json("email", None)
-#    password = request.get_json("password", None)
-#    if not email or not password:
-#        return jsonify({"message": "Bad username or password"}), 400
-#    new_user = User.query.filter(email == email).first()                    #TODO не работает мать его растак
-#    if not new_user:
-#        return jsonify({"message": "User not found"}), 404
-#    login_user(new_user)
-#    access_token = create_access_token(identity={"email": email})
-#    return jsonify({"access_token": access_token}), 200
+@app.route('/login', methods=["POST"])
+def login():
+    """Функция логина пользователя."""
+    if current_user.is_authenticated:                           #TODO ошибка вот здесь, в is_authenticated. Нет такого метода 
+        return redirect(url_for('upload_a_file'))
+    if request.method == 'POST':
+        params = request.json
+        user = User(**params)
+        if user.check_password(user.password):
+            login_user(user)
+    return redirect('upload_a_file')
 
 
-#"""Роутер отвечающий за выход пользователя"""
-#@app.route('/logout')                              ## TODO доделать
+#@app.route('/logout')                              ## TODO это во вторую
 #@login_required                                    
 #def logout():
-#    logout_user
-#    return jsonify({"message": "The user logged out"})
-#
-#
+#"""Функция отвечающая за выход пользователя"""
+#    logout_user()
+#    return redirect('Пользователь вышел из приложения', \
+#                     url_for('login'))
 
 
 @app.route('/users', methods=["GET"])
@@ -65,7 +69,7 @@ def get_users():
     """
     try:
         cursor = connection.cursor()
-        cursor.execute('SELECT users.id, users.email, users.username FROM users')
+        cursor.execute('SELECT users.id, users.username, users.email, users.password FROM users')
         row = cursor.fetchall()
         return jsonify(row)
     except Exception as e:
@@ -101,11 +105,11 @@ def get_or_delete_single_user(id):
             return e
 
 
-##"""Роутер главной страницы, отвечающий за загрузку файла"""
-##@app.route('/main')
-##@login_required
-##def upload_a_file():
-##    ...
+"""Роутер главной страницы, отвечающий за загрузку файла"""
+@app.route('/process')
+@login_required
+def upload_a_file():              # TODO как только будет работать эта функция, проект готов. Нужно, чтобы файл загружался, обрабатывался, и выгружался результат
+    return                        # Точнее, еще настоить GraphQL
 
 
 
