@@ -35,6 +35,7 @@
 
 **Тестирование через GraphQL**
 Запрос через (http://127.0.0.1:5000/graphql) выглядит следующим образом:
+<html>
     mutation {
       usermutation(username: username, email: email, password: password) {
       users{
@@ -44,7 +45,7 @@
           }
         }
     }
-
+</html>
 По ссылке (http://127.0.0.1:5000/graphql) указана подобная схема с возможными запросами.
 
 **Используемые технологии** <br>
