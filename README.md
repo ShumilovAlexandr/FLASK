@@ -10,6 +10,8 @@
 4. Запускаете его в любом текстовом редакторе в папке api/ командой ****flask run****.
 5. Далее - можете тестировать приложение в Postmane, или в браузере по ссылке [localhost](http://127.0.0.1:5000/graphql).
 
+**Пример запроса через Postman**
+
 **Используемые технологии** <br>
 ![PyPI - GraphQl-core Version](https://img.shields.io/badge/GraphQl-3.2.3-green)
 ![PyPI - Flask Version](https://img.shields.io/badge/Flask-2.2.2-blue)
