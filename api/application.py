@@ -1,22 +1,42 @@
 import psycopg2
+import aiofiles
+import os
 
-from flask import request, jsonify, redirect, url_for
+from flask import (request, 
+                   jsonify)
+from werkzeug.utils import secure_filename
+from flask_login import (login_user, 
+                         logout_user,
+                         login_required,
+                         LoginManager)
 from flask_jwt_extended import JWTManager
-from flask_login import login_user, \
-                        logout_user, \
-                        login_required, \
-                        current_user
+from flask_graphql import GraphQLView
 
+from . import db as db 
+from . import app as app
+from .models import User
+from .schema import schem 
 
-from model.models import User, db, app, login_manager
-
-
-login_manager.login_view = 'login'
 
 jwt = JWTManager(app)
 
-connection = psycopg2.connect(dbname="flaskapp", user="postgres", password="postgres",
+login_manager = LoginManager(app)
+
+connection = psycopg2.connect(dbname="flaskapp", user="postgres",
+                              password="postgres",
                               host="localhost")
+cursor = connection.cursor()
+
+
+@login_manager.user_loader
+def load_user(id):
+    return User.query.get(str(id))
+
+
+app.config['UPLOAD_FOLDER'] == \
+        os.getenv('UPLOAD_FOLDER')
+
+ALLOWED_EXTENSIONS = {'txt'}
 
 
 @app.route('/signup', methods=["POST"])
@@ -38,25 +58,24 @@ def register():
 
 
 @app.route('/login', methods=["POST"])
-def login():
+async def login():
     """Функция логина пользователя."""
-    if current_user.is_authenticated:                           #TODO ошибка вот здесь, в is_authenticated. Нет такого метода 
-        return redirect(url_for('upload_a_file'))
-    if request.method == 'POST':
-        params = request.json
-        user = User(**params)
-        if user.check_password(user.password):
-            login_user(user)
-    return redirect('upload_a_file')
+    params = request.json
+    user = User(**params)
+    check_user = User.query.filter_by(username=user.username,
+                                      email=user.email).first()
+    login_user(check_user)
+    return jsonify({'Сообщение': 'Пользователь {} '
+                                 'успешно авторизован.'.format(user.username)})
 
 
-#@app.route('/logout')                              ## TODO это во вторую
-#@login_required                                    
-#def logout():
-#"""Функция отвечающая за выход пользователя"""
-#    logout_user()
-#    return redirect('Пользователь вышел из приложения', \
-#                     url_for('login'))
+@app.route('/logout', methods=["POST"])
+@login_required                        
+def logout():
+    """Функция отвечающая за выход пользователя."""
+    logout_user()
+    return jsonify({"Результат": "200",
+                    "Cообщение": "Выход пользователя выполнен"})
 
 
 @app.route('/users', methods=["GET"])
@@ -68,8 +87,8 @@ def get_users():
     для проверки общего количества записей в БД о пользователях.
     """
     try:
-        cursor = connection.cursor()
-        cursor.execute('SELECT users.id, users.username, users.email, users.password FROM users')
+        cursor.execute('SELECT users.id, users.username, '
+                       'users.email, users.password FROM users')
         row = cursor.fetchall()
         return jsonify(row)
     except Exception as e:
@@ -87,8 +106,9 @@ def get_or_delete_single_user(id):
     """
     if request.method == "GET":
         try:
-            cursor = connection.cursor()
-            cursor.execute('SELECT users.id, users.email, users.username FROM users WHERE id = {}'.format(id))
+            cursor.execute('SELECT users.id, users.email, '
+                           'users.username FROM users '
+                           'WHERE id = {}'.format(id))
             row = cursor.fetchone()
             return jsonify(row)
         except Exception as e:
@@ -96,20 +116,72 @@ def get_or_delete_single_user(id):
     else:
         try:
             if request.method == "DELETE":
-                cursor = connection.cursor()
                 cursor.execute('DELETE FROM users WHERE id = {}'.format(id))
                 connection.commit()
                 row = cursor.rowcount
-                return jsonify(f"Общее количество удаленных записей - {row}", "Запись под номером {} успешно удалена".format(id))
+                return jsonify(
+                    {"Количество": f"Общее количество "
+                                   f"удаленных записей - {row}",
+                     "Сообщение": "Запись под номером {} успешно "
+                                  "удалена".format(id)})
         except Exception as e:
             return e
 
 
-"""Роутер главной страницы, отвечающий за загрузку файла"""
-@app.route('/process')
+async def process_the_file(filename):
+    """Роутер, отвечающий за Обработку файла."""
+    async with aiofiles.open(app.config['UPLOAD_FOLDER'] + filename,
+                             mode='r') as file:
+        contents = await file.read()
+        count = len(contents)
+        line_count = 0
+        file_name = os.path.basename(app.config['UPLOAD_FOLDER'] + filename)
+        size_file = os.stat(app.config['UPLOAD_FOLDER'] + filename).st_size
+        for _ in contents:
+            if _ == '\n':
+                line_count += 1
+        return jsonify({"Название загружаемого файла": f"{file_name}",
+                        "Размер загружаемого файла в байтах": f"{size_file}",
+                        "Общее количество символов в "
+                        "загружаемом файле": f"{count}",
+                        "Количество строк в загружаемом "
+                        "файле": f"{line_count}"})
+
+
+async def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+@app.route('/process', methods=["POST", "GET"])
 @login_required
-def upload_a_file():              # TODO как только будет работать эта функция, проект готов. Нужно, чтобы файл загружался, обрабатывался, и выгружался результат
-    return                        # Точнее, еще настоить GraphQL
+async def upload_file():
+    """Главный роутер, отвечающий за загрузку файла."""
+    if request.method == "POST":
+        if 'file' not in request.files:
+            return jsonify('Файл с данным именем не найден')
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify('Выберете существующий файл')
+        if file and await allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        data = await process_the_file(filename)
+        return jsonify({"Данные": data.json,
+                        "Сообщение": 'Файл успешно загружен на сервер'})
+
+def graphql():
+    view_func = GraphQLView.as_view(
+        'graphql',
+        schema=schem,
+        graphiql=True
+        )
+    return view_func
+
+app.add_url_rule(
+    '/graphql',
+    view_func=graphql()
+)
 
 
 

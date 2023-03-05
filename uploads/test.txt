@@ -1,0 +1,12 @@
+Asynchronous code has become a mainstay of Python development. 
+With asyncio becoming part of the standard library and many third party packages providing features compatible with it, this paradigm is not going away anytime soon.
+
+If you're writing asynchronous code, it's important to make sure all parts of your code are working together so one aspect of it isn't slowing everything else down. 
+File I/O can be a common blocker on this front, so let's walk through how to use the aiofiles library to work with files asynchronously.
+
+Make sure to have your Python environment setup before we get started.
+
+Follow this guide up through the virtualenv section if you need some help.
+
+Getting everything working correctly, especially with respect to virtual environments is important for isolating your dependencies if you have multiple projects running on the same machine. 
+You will need at least Python 3.7 or higher in order to run the code in this post.
